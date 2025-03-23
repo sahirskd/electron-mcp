@@ -2,6 +2,8 @@ import type {AppModule} from '../AppModule.js';
 import {ModuleContext} from '../ModuleContext.js';
 import {BrowserWindow} from 'electron';
 import type {AppInitConfig} from '../AppInitConfig.js';
+import store from './AppStore.js';
+import setupTray from './SetupTray.js';
 
 class WindowManager implements AppModule {
   readonly #preload: {path: string};
@@ -16,17 +18,24 @@ class WindowManager implements AppModule {
 
   async enable({app}: ModuleContext): Promise<void> {
     await app.whenReady();
-    await this.restoreOrCreateWindow(true);
+    const window = await this.restoreOrCreateWindow(true);
+    setupTray(window);
     app.on('second-instance', () => this.restoreOrCreateWindow(true));
     app.on('activate', () => this.restoreOrCreateWindow(true));
   }
 
   async createWindow(): Promise<BrowserWindow> {
+    const { width, height } = store.get('window.bounds', { width: 1200, height: 800 });
+
     const browserWindow = new BrowserWindow({
       show: false, // Use the 'ready-to-show' event to show the instantiated BrowserWindow.
-      width: 1400,
-      height: 950,
+      width,
+      height,
+      minWidth: 800,
+      minHeight: 600,
       icon: "../buildResources/icon.png",
+      titleBarStyle: 'hiddenInset', // Mac-style title bar
+      backgroundColor: '#ffffff',
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -85,6 +94,14 @@ class WindowManager implements AppModule {
     if (window === undefined) {
       window = await this.createWindow();
     }
+
+    window.on('resize', () => {
+      store.set('window.bounds', window.getBounds());
+    });
+
+    window.on('move', () => {
+      store.set('window.bounds', window.getBounds());
+    });
 
     if (!show) {
       return window;
